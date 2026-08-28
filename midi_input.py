@@ -1,15 +1,8 @@
 import mido
-import pynput
 
-print("MIDI devices: ")
-
-for device in mido.get_input_names():
-    print(device)
-
-device = mido.get_input_names()[1]
-
-with mido.open_input(device) as port:
+def listen(device):
     print(f"Listening to {device}...")
-
-    for message in port:
-        print(message)
+    
+    with mido.open_input(device) as port:
+        for message in port:
+            yield message
