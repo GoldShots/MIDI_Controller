@@ -2,49 +2,33 @@
 import mido
 import threading
 import time
-from pynput.mouse import Button, Controller
+import sys
 
 # Function Imports
 from midi_input import listen
 import keyboard_output
 import mouse_output
+from mapper import Mapper
+from gui import create_gui
 
 # Temporarily getting midi device
 device = mido.get_input_names()[1]
 
-# Sensitivity of Mouse Looping
-mouse_sens = 5
+# Create Mapper
+mapper = Mapper()
 
-# Keyboard Mappings
-key_mappings = {
-    60: "w",
-    61: "a",
-    62: "s",
-    63: "d",
-}
-
-mouse_button_mappings = {
-    64: Button.left,
-    65: Button.right
-}
-
-mouse_mappings = {
-    66: (0, -mouse_sens), # Up
-    67: (0, mouse_sens), # Down
-    68: (-mouse_sens, 0), # Left
-    69: (mouse_sens, 0), # Right
-}
-
+# Held Mouse Inputs
 held_mouse_inputs = set()
-held_mouse_lock = threading.Lock()
+
+# Create GUI
+app, window = create_gui(device, mapper)
+
+sys.exit(app.exec())
 
 def mouse_movement_loop():
     while True:
-        with held_mouse_lock:
-            held_notes = list(held_mouse_inputs)
-
-        for note in held_notes:
-            movement = mouse_mappings[note]
+        for note in held_mouse_inputs:
+            movement = mapper.mouse_mappings[note]
 
             if movement:
                 x, y = movement
@@ -54,7 +38,6 @@ def mouse_movement_loop():
 
 # Start mouse thread
 mouse_thread = threading.Thread(target = mouse_movement_loop, daemon = True)
-
 mouse_thread.start()
 
 
@@ -63,35 +46,36 @@ for message in listen(device):
     # Pressing Key
     if message.type == "note_on":
         # If it is keyboard input
-        if message.note in key_mappings:
-            key = key_mappings.get(message.note)
+        if message.note in mapper.key_mappings:
+            key = mapper.key_mappings.get(message.note)
 
             if key:
                 keyboard_output.press(key)
         # If it is mouse button input
-        if message.note in mouse_button_mappings:
-            button = mouse_button_mappings.get(message.note)
+        if message.note in mapper.mouse_button_mappings:
+            button = mapper.mouse_button_mappings.get(message.note)
 
             if button:
                 mouse_output.press(button)
-        # If it is a mouse movement
-        if message.note in mouse_mappings:
-            with held_mouse_lock:
-                held_mouse_inputs.add(message.note)
+
+        # If it is mouse movement input
+        if message.note in mapper.mouse_mappings:
+            held_mouse_inputs.add(message.note)
+
     elif message.type == "note_off":
         # If it is keyboard input
-        if message.note in key_mappings:
-            key = key_mappings.get(message.note)
+        if message.note in mapper.key_mappings:
+            key = mapper.key_mappings.get(message.note)
 
             if key:
                 keyboard_output.release(key)
         # If it is mouse button input
-        if message.note in mouse_button_mappings:
-            button = mouse_button_mappings.get(message.note)
+        if message.note in mapper.mouse_button_mappings:
+            button = mapper.mouse_button_mappings.get(message.note)
 
             if button:
                 mouse_output.release(button)
-        # If it is a mouse movement
-        if message.note in mouse_mappings:
-            with held_mouse_lock:
-                held_mouse_inputs.discard(message.note)
+
+        # If it is mouse movement input
+        if message.note in mapper.mouse_mappings:
+            held_mouse_inputs.discard(message.note)
