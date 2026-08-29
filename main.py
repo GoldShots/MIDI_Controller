@@ -13,7 +13,7 @@ from mapper import Mapper
 from gui import create_gui
 
 # Create Mapper
-mapper = Mapper()
+mapper = Mapper() 
 
 # Main MIDI Driver
 def midi_loop(device):

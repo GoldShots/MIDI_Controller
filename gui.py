@@ -7,11 +7,13 @@ from PySide6.QtWidgets import (
     QPushButton,
     QDialog,
     QVBoxLayout,
-    QComboBox
+    QComboBox,
+    QSpinBox
 )
 
-from PySide6.QtCore import Qt
-from pynput.mouse import Button
+from PySide6.QtCore import Qt, QTimer
+from pynput.mouse import Button, Listener as MouseListener
+from pynput.keyboard import Listener as KeyboardListener
 import mido
 import sys
 import os
@@ -45,36 +47,166 @@ def edit_mapping(table, mapper):
 
     note = note_item.data(Qt.UserRole)
 
+    mapping_type, mapping = mapper.mappings[note]
+
     dialog = QDialog(table)
     dialog.setWindowTitle("Edit Mapping")
+    dialog.resize(300, 200)
 
     layout = QVBoxLayout(dialog)
 
+    # MIDI Note
+    midi_note = QSpinBox()
+    midi_note.setRange(0, 127)
+    midi_note.setValue(note)
+
+    layout.addWidget(midi_note)
+
+    # Output Type
     output_type = QComboBox()
     output_type.addItems([
         "Keyboard",
         "Mouse Button",
         "Mouse Movement"
     ])
+    output_type.setCurrentText(mapping_type)
 
     layout.addWidget(output_type)
 
-    save_button = QPushButton("Save")
-    layout.addWidget(save_button)
+    # Input
+    input_label = QLabel()
 
-    save_button.clicked.connect(dialog.accept)
+    layout.addWidget(input_label)
 
-    if dialog.exec():
+    input_selection = QComboBox()
+
+    layout.addWidget(input_selection)
+
+    sensitivity = QSpinBox()
+    sensitivity.setRange(1, 100)
+    sensitivity.setValue(mapper.mouse_sens)
+
+    layout.addWidget(sensitivity)
+
+    captured_input = None
+    keyboard_listener = None
+    mouse_listener = None
+
+    def start_keyboard_listener():
+        nonlocal keyboard_listener
+
+        def on_press(key):
+            nonlocal captured_input
+
+            captured_input = key
+
+            keyboard_listener.stop()
+
+        keyboard_listener = KeyboardListener(
+            on_press = on_press
+        )
+
+        keyboard_listener.start()
+
+    def start_mouse_listener():
+        nonlocal mouse_listener
+
+        def on_click(x, y, button, pressed):
+            nonlocal captured_input
+
+            if pressed:
+                captured_input = button
+
+                mouse_listener.stop()
+
+        mouse_listener = MouseListener(
+            on_click = on_click
+        )
+
+        mouse_listener.start()
+
+    timer = QTimer(dialog)
+
+    def update_captured_input():
+        if captured_input is not None:
+
+            input_label.setText(
+                f"Selected: {captured_input}"
+            )
+
+    timer.timeout.connect(update_captured_input)
+
+    timer.start(50)
+
+    def update_input_options():
+        nonlocal keyboard_listener, mouse_listener, captured_input
+
+        if keyboard_listener:
+            keyboard_listener.stop()
+            keyboard_listener = None
+
+        if mouse_listener:
+            mouse_listener.stop()
+            mouse_listener = None
+
+        input_selection.clear()
+        captured_input = None
+
         selected_type = output_type.currentText()
 
         if selected_type == "Keyboard":
-            mapper.mappings[note] = ("Keyboard", "w")
-        elif selected_type == "Mouse Button":
-            mapper.mappings[note] = ("Mouse Button", Button.left)
-        elif selected_type == "Mouse Movement":
-            mapper.mappings[note] = ("Mouse Movement", (0, -mapper.mouse_sens))
+            input_label.setText("Press a key...")
+            input_selection.hide()
 
-        table.item(row, 1).setText(selected_type)
+            sensitivity.hide()
+
+            start_keyboard_listener()
+        elif selected_type == "Mouse Button":
+            input_label.setText("Click a mouse button...")
+            input_selection.hide()
+
+            sensitivity.hide()
+
+            start_mouse_listener()
+        elif selected_type == "Mouse Movement":
+            input_label.setText("Direction:")
+            input_selection.addItems([
+                "Up",
+                "Down",
+                "Left",
+                "Right"
+            ])
+            input_selection.show()
+
+            sensitivity.show()
+
+    output_type.currentTextChanged.connect(update_input_options)
+
+    update_input_options()
+
+    # Buttons
+    save_button = QPushButton("Save")
+    cancel_button = QPushButton("Cancel")
+
+    layout.addWidget(save_button)
+    layout.addWidget(cancel_button)
+
+    save_button.clicked.connect(dialog.accept)
+    cancel_button.clicked.connect(dialog.reject)
+
+    if dialog.exec():
+        new_note = midi_note.value()
+        new_type = output_type.currentText()
+
+        # Removing duplicate midi note mappings
+        if new_note in mapper.mappings:
+            mapper.mappings.pop(new_note)
+
+        # Removing old MIDI mapping if it was changed.
+        if new_note != note:
+            mapper.mappings.pop(note)
+
+        mapper.mappings[new_note] = (new_type, captured_input)
 
 def create_gui(mapper, connect_callback):
     app = QApplication(sys.argv)
@@ -124,7 +256,6 @@ def create_gui(mapper, connect_callback):
     table.resize(560, 300)
 
     # Add Mappings
-
     for note, mapping_data in mapper.mappings.items():
         mapping_type, mapping = mapping_data
 
@@ -171,6 +302,7 @@ def create_gui(mapper, connect_callback):
     table.setSelectionBehavior(QTableWidget.SelectRows)
     table.setEditTriggers(QTableWidget.NoEditTriggers)
 
+    # Edit Mapping Button
     edit_button = QPushButton("Edit Mapping", parent = window)
     edit_button.move(20, 365)
     edit_button.clicked.connect(
