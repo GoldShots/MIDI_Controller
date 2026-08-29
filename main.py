@@ -36,10 +36,14 @@ mouse_mappings = {
 }
 
 held_mouse_inputs = set()
+held_mouse_lock = threading.Lock()
 
 def mouse_movement_loop():
     while True:
-        for note in held_mouse_inputs:
+        with held_mouse_lock:
+            held_notes = list(held_mouse_inputs)
+
+        for note in held_notes:
             movement = mouse_mappings[note]
 
             if movement:
@@ -72,7 +76,8 @@ for message in listen(device):
                 mouse_output.press(button)
         # If it is a mouse movement
         if message.note in mouse_mappings:
-            held_mouse_inputs.add(message.note)
+            with held_mouse_lock:
+                held_mouse_inputs.add(message.note)
     elif message.type == "note_off":
         # If it is keyboard input
         if message.note in key_mappings:
@@ -88,7 +93,5 @@ for message in listen(device):
                 mouse_output.release(button)
         # If it is a mouse movement
         if message.note in mouse_mappings:
-            movement = mouse_mappings.get(message.note)
-
-            if movement:
-                held_mouse_inputs.remove(movement)
+            with held_mouse_lock:
+                held_mouse_inputs.discard(message.note)
