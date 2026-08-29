@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt
 from pynput.mouse import Button
+import mido
 import sys
+import os
 
 class MainWindow(QWidget):
 
@@ -26,7 +28,7 @@ def midi_note_name(note):
         "F#", "G", "G#", "A", "A#", "B"
     ]
 
-    octave = (int)(note / 12) - 1
+    octave = int(note / 12) - 1
 
     return f"{names[note % 12]}{octave}"
 
@@ -63,114 +65,107 @@ def edit_mapping(table, mapper):
     save_button.clicked.connect(dialog.accept)
 
     if dialog.exec():
-        ...
+        selected_type = output_type.currentText()
 
-def create_gui(device, mapper):
+        if selected_type == "Keyboard":
+            mapper.mappings[note] = ("Keyboard", "w")
+        elif selected_type == "Mouse Button":
+            mapper.mappings[note] = ("Mouse Button", Button.left)
+        elif selected_type == "Mouse Movement":
+            mapper.mappings[note] = ("Mouse Movement", (0, -mapper.mouse_sens))
 
+        table.item(row, 1).setText(selected_type)
+
+def create_gui(mapper, connect_callback):
     app = QApplication(sys.argv)
 
-    window = MainWindow()
+    # Find style.qss path
+    style_path = os.path.join(os.path.dirname(__file__), "style.qss")
 
+    with open(style_path, "r") as file:
+        app.setStyleSheet(file.read())
+
+    window = MainWindow()
     window.setWindowTitle("MIDI to Controller")
-    window.resize(600, 400)
+    window.resize(600, 410)
 
     label = QLabel("MIDI to Controller", parent = window)
     label.move(20, 20)
 
+    # Device Dropdown
+    device_dropdown = QComboBox(parent = window)
+    device_dropdown.addItems(mido.get_input_names())
+    device_dropdown.move(20, 20)
+    device_dropdown.resize(300, 30)
+
+    device = mido.get_input_names()[0]
+
+    if device in mido.get_input_names():
+        device_dropdown.setCurrentText(device)
+
+
+    # Connect Button
+    connect_button = QPushButton("Connect", parent = window)
+    connect_button.move(330, 20)
+    connect_button.resize(100, 30)
+    connect_button.clicked.connect(
+        lambda: connect_callback(device_dropdown.currentText())
+    )
+
     # Mapping Table
     table = QTableWidget(parent = window)
-
     table.setColumnCount(3)
     table.setHorizontalHeaderLabels([
         "MIDI Note",
-        "Output Type", 
+        "Output Type",
         "Mapping"
     ])
-
     table.move(20, 60)
     table.resize(560, 300)
 
-    # Add Keyboard Mappings
-    for note, key in mapper.key_mappings.items():
+    # Add Mappings
+
+    for note, mapping_data in mapper.mappings.items():
+        mapping_type, mapping = mapping_data
+
         row = table.rowCount()
+
         table.insertRow(row)
+
+        note_item = QTableWidgetItem(midi_note_name(note))
+        note_item.setData(Qt.UserRole, note)
 
         table.setItem(
             row,
             0,
-            QTableWidgetItem(midi_note_name(note))
+            note_item
         )
-
         table.setItem(
             row,
             1,
-            QTableWidgetItem("Keyboard")
+            QTableWidgetItem(mapping_type)
         )
+
+        if mapping_type == "Keyboard":
+            mapping_text = mapping
+        elif mapping_type == "Mouse Button":
+            mapping_text = str(mapping)
+        elif mapping_type == "Mouse Movement":
+            x, y = mapping
+
+            if x > 0:
+                mapping_text = "Right"
+            elif x < 0:
+                mapping_text = "Left"
+            elif y > 0:
+                mapping_text = "Down"
+            else:
+                mapping_text = "Up"
 
         table.setItem(
             row,
             2,
-            QTableWidgetItem(key)
-        )
-
-    # Add mouse button mappings
-    for note, button in mapper.mouse_button_mappings.items():
-        row = table.rowCount()
-        table.insertRow(row)
-
-        table.setItem(
-            row,
-            0,
-            QTableWidgetItem(midi_note_name(note))
-        )
-
-        table.setItem(
-            row,
-            1,
-            QTableWidgetItem("Mouse Button")
-        )
-
-        table.setItem(
-            row,
-            2,
-            QTableWidgetItem(str(button))
-        )
-
-    # Add mouse movement mappings
-    for note, movement in mapper.mouse_mappings.items():
-        row = table.rowCount()
-        table.insertRow(row)
-
-        table.setItem(
-            row,
-            0,
-            QTableWidgetItem(midi_note_name(note))
-        )
-
-        table.setItem(
-            row,
-            1,
-            QTableWidgetItem("Mouse")
-        )
-
-        x, y = movement
-
-        if x > 0:
-            mapping = "Right"
-
-        elif x < 0:
-            mapping = "Left"
-
-        elif y > 0:
-            mapping = "Down"
-
-        else:
-            mapping = "Up"
-
-        table.setItem(
-            row,
-            2,
-            QTableWidgetItem(mapping)
+            QTableWidgetItem(mapping_text)
         )
 
     table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -178,7 +173,6 @@ def create_gui(device, mapper):
 
     edit_button = QPushButton("Edit Mapping", parent = window)
     edit_button.move(20, 365)
-
     edit_button.clicked.connect(
         lambda: edit_mapping(table, mapper)
     )

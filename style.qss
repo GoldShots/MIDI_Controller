@@ -1,0 +1,117 @@
+/* Main Window */
+
+QWidget {
+    background-color: #202020;
+    color: #ffffff;
+    font-family: Arial;
+    font-size: 14px;
+}
+
+
+/* Labels */
+
+QLabel {
+    color: #ffffff;
+}
+
+
+/* Buttons */
+
+QPushButton {
+    background-color: #404040;
+    color: #ffffff;
+    border: 1px solid #606060;
+    border-radius: 5px;
+    padding: 6px 12px;
+}
+
+QPushButton:hover {
+    background-color: #505050;
+}
+
+QPushButton:pressed {
+    background-color: #303030;
+}
+
+QPushButton:disabled {
+    background-color: #2a2a2a;
+    color: #777777;
+}
+
+
+/* Combo Boxes */
+
+QComboBox {
+    background-color: #303030;
+    color: #ffffff;
+    border: 1px solid #606060;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+QComboBox:hover {
+    border: 1px solid #808080;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #303030;
+    color: #ffffff;
+    selection-background-color: #505050;
+}
+
+
+/* Mapping Table */
+
+QTableWidget {
+    background-color: #282828;
+    color: #ffffff;
+    border: 1px solid #505050;
+    gridline-color: #444444;
+    alternate-background-color: #303030;
+}
+
+QTableWidget::item {
+    padding: 5px;
+}
+
+QTableWidget::item:selected {
+    background-color: #505a70;
+    color: #ffffff;
+}
+
+
+/* Table Headers */
+
+QHeaderView::section {
+    background-color: #383838;
+    color: #ffffff;
+    border: none;
+    border-bottom: 1px solid #505050;
+    padding: 6px;
+    font-weight: bold;
+}
+
+
+/* Dialogs */
+
+QDialog {
+    background-color: #202020;
+}
+
+
+/* Scroll Bars */
+
+QScrollBar:vertical {
+    background-color: #252525;
+    width: 12px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #505050;
+    border-radius: 5px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #606060;
+}

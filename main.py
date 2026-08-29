@@ -3,32 +3,63 @@ import mido
 import threading
 import time
 import sys
+import os
 
-# Function Imports
+# File Imports
 from midi_input import listen
 import keyboard_output
 import mouse_output
 from mapper import Mapper
 from gui import create_gui
 
-# Temporarily getting midi device
-device = mido.get_input_names()[1]
-
 # Create Mapper
 mapper = Mapper()
 
+# Main MIDI Driver
+def midi_loop(device):
+    for message in listen(device):
+        # Pressing Key
+        if message.note in mapper.mappings:
+            mapping_type, mapping = mapper.mappings[message.note]
+
+            if message.type == "note_on":
+                if mapping_type == "Keyboard":
+                    keyboard_output.press(mapping)
+                elif mapping_type == "Mouse Button":
+                    mouse_output.press(mapping)
+                elif mapping_type == "Mouse Movement":
+                    with held_mouse_inputs_lock:
+                        held_mouse_inputs.add(message.note)
+            elif message.type == "note_off":
+                if mapping_type == "Keyboard":
+                    keyboard_output.release(mapping)
+                elif mapping_type == "Mouse Button":
+                    mouse_output.release(mapping)
+                elif mapping_type == "Mouse Movement":
+                    with held_mouse_inputs_lock:
+                        held_mouse_inputs.discard(message.note)
+
+# Function to connect midi
+def connect_midi(device):
+    midi_thread = threading.Thread(
+        target = midi_loop,
+        args = (device,),
+        daemon = True
+    )
+
+    midi_thread.start()
+
 # Held Mouse Inputs
 held_mouse_inputs = set()
-
-# Create GUI
-app, window = create_gui(device, mapper)
-
-sys.exit(app.exec())
+held_mouse_inputs_lock = threading.Lock()
 
 def mouse_movement_loop():
     while True:
-        for note in held_mouse_inputs:
-            movement = mapper.mouse_mappings[note]
+        with held_mouse_inputs_lock:
+            held_notes = list(held_mouse_inputs)
+
+        for note in held_notes:
+            mapping_type, movement = mapper.mappings[note]
 
             if movement:
                 x, y = movement
@@ -40,42 +71,6 @@ def mouse_movement_loop():
 mouse_thread = threading.Thread(target = mouse_movement_loop, daemon = True)
 mouse_thread.start()
 
-
-# Main MIDI Driver
-for message in listen(device):
-    # Pressing Key
-    if message.type == "note_on":
-        # If it is keyboard input
-        if message.note in mapper.key_mappings:
-            key = mapper.key_mappings.get(message.note)
-
-            if key:
-                keyboard_output.press(key)
-        # If it is mouse button input
-        if message.note in mapper.mouse_button_mappings:
-            button = mapper.mouse_button_mappings.get(message.note)
-
-            if button:
-                mouse_output.press(button)
-
-        # If it is mouse movement input
-        if message.note in mapper.mouse_mappings:
-            held_mouse_inputs.add(message.note)
-
-    elif message.type == "note_off":
-        # If it is keyboard input
-        if message.note in mapper.key_mappings:
-            key = mapper.key_mappings.get(message.note)
-
-            if key:
-                keyboard_output.release(key)
-        # If it is mouse button input
-        if message.note in mapper.mouse_button_mappings:
-            button = mapper.mouse_button_mappings.get(message.note)
-
-            if button:
-                mouse_output.release(button)
-
-        # If it is mouse movement input
-        if message.note in mapper.mouse_mappings:
-            held_mouse_inputs.discard(message.note)
+# Create GUI
+app, window = create_gui(mapper, connect_midi)
+sys.exit(app.exec())
